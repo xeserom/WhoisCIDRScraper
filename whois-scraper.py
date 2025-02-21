@@ -3,6 +3,7 @@ import csv
 import asyncio
 import utils
 import os
+from time import time
 
 class IPv4Range:
     def __init__(self, start: str, end: str, owner: str):
@@ -90,7 +91,7 @@ class Whois:
         whois_host, whois_options, range_finder = WHOIS[ip_range.owner]
         
         try:       
-            async with asyncio.timeout(5):  
+            async with asyncio.timeout(10):  
                 reader, writer = await asyncio.open_connection(whois_host, 43)
 
             writer.write(whois_options + ip.encode() + b'\r\n')
@@ -121,7 +122,7 @@ class IPv4Stream:
         self.position = position
         self.chunk_size = chunk_size
         
-    def append(self, ip: str):
+    def write(self, ip: str):
         self.ips.append(ip)
 
     def read(self):
@@ -173,27 +174,17 @@ def find_missing_ips(ip_registry: IPv4Registry):
         ip_range_map[start_ip] for start_ip in sorted_start_ips
     ]
 
-
     missing_ips = [
         utils.int_to_ip(sorted_ip_ranges[i].end_int + 1)
         for i in range(len(sorted_ip_ranges) - 1)
         if sorted_ip_ranges[i].end_int + 1 != sorted_ip_ranges[i + 1].start_int
     ]
 
-    # NOTE 
-    # some whois records are mismatched. 
-    # i.e. queried ip is 153.1.0.0 but recorded range is 153.0.0.0 - 153.255.255.255
-    # this means there are false positives in the filtered list
-    # should i fix this edge case if it doesn't cause any problems?
     saved_ips = os.listdir('store')
-    filtered_ips = list(filter(lambda ip: ip in saved_ips, missing_ips))
+    #TODO filter bogon ips
+    filtered_ips = [ip for ip in missing_ips if ip not in saved_ips]
 
-    for ip in filtered_ips:
-        with open(f'store/{ip}', 'rb') as f:
-            if b'access denied' in f.read():
-                filtered_ips.remove(ip)
-
-    return missing_ips
+    return filtered_ips
 
 async def main():
     if not os.path.exists('store'):
@@ -227,11 +218,14 @@ async def main():
                 next_ip = ip_range.next_ip()
                 
                 if not ip_registry.find(next_ip):
-                    ip_stream.append(next_ip)
+                    ip_stream.write(next_ip)
 
                 ip_registry.append(ip_range)
 
         ips_to_scan = find_missing_ips(ip_registry)
+
+        for ip in ips_to_scan:
+            ip_stream.write(ip)
 
 if __name__ == '__main__':
     asyncio.run(main())
