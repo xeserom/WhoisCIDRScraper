@@ -150,7 +150,7 @@ def resume():
         if not ip_range:
             continue
 
-        start_end = WHOIS[ip_range.owner](whois_answer)
+        start_end = WHOIS[ip_range.owner][2](whois_answer)
 
         if not start_end:
             #TODO check if whois answer was blocked
@@ -173,13 +173,27 @@ def find_missing_ips(ip_registry: IPv4Registry):
         ip_range_map[start_ip] for start_ip in sorted_start_ips
     ]
 
-    missing_ranges = [
+
+    missing_ips = [
         utils.int_to_ip(sorted_ip_ranges[i].end_int + 1)
         for i in range(len(sorted_ip_ranges) - 1)
         if sorted_ip_ranges[i].end_int + 1 != sorted_ip_ranges[i + 1].start_int
     ]
 
-    return missing_ranges
+    # NOTE 
+    # some whois records are mismatched. 
+    # i.e. queried ip is 153.1.0.0 but recorded range is 153.0.0.0 - 153.255.255.255
+    # this means there are false positives in the filtered list
+    # should i fix this edge case if it doesn't cause any problems?
+    saved_ips = os.listdir('store')
+    filtered_ips = list(filter(lambda ip: ip in saved_ips, missing_ips))
+
+    for ip in filtered_ips:
+        with open(f'store/{ip}', 'rb') as f:
+            if b'access denied' in f.read():
+                filtered_ips.remove(ip)
+
+    return missing_ips
 
 async def main():
     if not os.path.exists('store'):
