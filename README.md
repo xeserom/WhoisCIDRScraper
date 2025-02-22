@@ -5,7 +5,7 @@ The goal of this tool is to scrape every CIDR from the whois registries.
 `python whois-scraper.py`
 
 ### TODO
-Need to add a feature to search scraped whois records.
+Need to add a feature to search scraped whois records.  
 Scrape GeoLocation data from GeoFeed files
 
 ### Compare With
